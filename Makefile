@@ -1,7 +1,6 @@
 MODULE  := github.com/robeeejay/prusa-tasmota-lights
 NAME    := tasmota-lights
 VERSION := $(shell sed -n 's/^version: //p' module.yaml)
-PI      ?= robee@prusamini
 
 .PHONY: test release copy
 
@@ -20,6 +19,7 @@ release: test
 # Puts the release and the install script on the Pi. The install itself needs
 # root, for docker, so it is run there by hand.
 copy: release
+	@test -n "$(PI)" || { echo "Name the server: make copy PI=user@host"; exit 1; }
 	ssh $(PI) 'rm -rf ~/$(NAME)-$(VERSION) && mkdir -p ~/$(NAME)-$(VERSION)'
 	scp -q release/* scripts/install.sh $(PI):~/$(NAME)-$(VERSION)/
 	@echo "On the Pi: sudo bash ~/$(NAME)-$(VERSION)/install.sh"
