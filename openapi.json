@@ -1,0 +1,71 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "tasmota-lights",
+    "version": "0.1.0",
+    "description": "The one route tasmota-lights serves. The path is relative to the mount the host assigns."
+  },
+  "paths": {
+    "/status": {
+      "get": {
+        "operationId": "read-status",
+        "summary": "What the module sees and what the lights last did",
+        "description": "Every printer the module follows with its state, temperatures, open dialog and the mood it decided, and the scene last sent to Tasmota with any error it answered. The host takes view_resource on the module's instance before this is called.",
+        "responses": {
+          "200": {
+            "description": "The module's view of the printers and the lights.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "configured": {"type": "boolean", "description": "Whether the host has sent the settings. Nothing is followed until it has."},
+                    "printers": {
+                      "type": "array",
+                      "description": "Every printer the module follows, ordered by id.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {"type": "string", "description": "The printer's id in Prusa Connect."},
+                          "name": {"type": "string", "description": "The printer's name."},
+                          "connected": {"type": "boolean", "description": "Whether Prusa Connect has a link to it."},
+                          "state": {"type": "string", "description": "The state word the printer reports, such as PRINTING."},
+                          "mood": {"type": "string", "description": "The scene this printer alone would show."},
+                          "nozzle": {"type": "number", "description": "Nozzle temperature in degrees Celsius."},
+                          "nozzle_target": {"type": "number", "description": "Nozzle target, zero when there is none."},
+                          "bed": {"type": "number", "description": "Bed temperature in degrees Celsius."},
+                          "bed_target": {"type": "number", "description": "Bed target, zero when there is none."},
+                          "dialog": {
+                            "type": "object",
+                            "description": "The dialog the printer is waiting on, absent when there is none.",
+                            "properties": {
+                              "code": {"type": "string", "description": "The firmware's code for the dialog."},
+                              "title": {"type": "string", "description": "The title on the printer's screen."},
+                              "text": {"type": "string", "description": "The text on the printer's screen."}
+                            }
+                          }
+                        },
+                        "required": ["id", "connected", "state", "mood"]
+                      }
+                    },
+                    "lights": {
+                      "type": "object",
+                      "description": "The scene last sent. Absent until the settings arrive.",
+                      "properties": {
+                        "mood": {"type": "string", "description": "The mood whose scene was sent."},
+                        "printer": {"type": "string", "description": "The printer the mood was for."},
+                        "sent_at": {"type": "string", "format": "date-time", "description": "When it was sent."},
+                        "error": {"type": "string", "description": "What Tasmota answered when the scene did not go through. It is sent again until it does."}
+                      }
+                    }
+                  },
+                  "required": ["configured", "printers"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

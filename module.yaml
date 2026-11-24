@@ -1,0 +1,63 @@
+# The manifest `prusa-connect module add` reads out of the release.
+
+name: tasmota-lights
+title: Tasmota lights
+summary: Sets the scene on a Tasmota light from what a printer is doing.
+kind: sink
+version: 0.1.0
+license: MIT
+contract_major: 1
+openapi: openapi.json
+# The Raspberry Pi 4 the server runs on.
+platforms:
+  - linux_arm64
+
+# observe reads the printers and follows the event stream as the module itself.
+permissions:
+  - observe
+
+egress:
+  - option: tasmota_url
+    ports: [80]
+    from: process
+    why: Switches the Tasmota light to the scene for what the printer is doing.
+    sends: Tasmota commands such as Power1 ON and Color1 FF6000. Nothing about the printer or its prints.
+
+options:
+  - key: tasmota_url
+    type: url
+    default: "http://192.168.178.54"
+    summary: The Tasmota device, as the address its web page opens on.
+  - key: printer
+    type: string
+    default: ""
+    summary: The printer the lights follow, by id or name. Empty follows every printer and shows the one that most needs a person.
+  - key: warm_margin
+    type: number
+    default: "5"
+    summary: How many degrees under its target a heater counts as warmed up.
+  - key: filament_codes
+    type: list
+    default: "[]"
+    summary: Dialog codes that mean the printer wants filament, for a dialog whose words do not say so.
+  - key: filament_words
+    type: list
+    default: '["filament"]'
+    summary: Words in a dialog's title or text that mean the printer wants filament.
+  - key: scenes
+    type: object
+    # Power1 and Color1 are the RGB light, Power2 the white one. Commands are
+    # separated by semicolons and sent in order. An empty scene leaves the
+    # lights as they are.
+    default: >-
+      {"offline": "Power1 OFF; Power2 OFF",
+       "idle": "Power1 OFF; Power2 OFF",
+       "warming": "Power1 ON; Color1 FF6000; Power2 OFF",
+       "filament": "Power1 ON; Color1 0040FF; Power2 OFF",
+       "attention": "Power1 ON; Color1 FFC000; Power2 OFF",
+       "printing": "Power1 OFF; Power2 ON",
+       "paused": "Power1 ON; Color1 FFC000; Power2 ON",
+       "finished": "Power1 ON; Color1 00FF00; Power2 ON",
+       "stopped": "Power1 OFF; Power2 OFF",
+       "error": "Power1 ON; Color1 FF0000; Power2 OFF"}
+    summary: The Tasmota commands for each mood, separated by semicolons.
