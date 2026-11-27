@@ -5,7 +5,7 @@ then suddenly wants you: the filament ran out, the print finished, something
 went wrong. This module turns a Tasmota-controlled LED strip into a status light
 you can read from across the room. Orange while it warms up, white while it
 prints (which also lights the camera), blue when it wants filament, green when
-it's done.
+it's done, and red when it has stopped and needs you.
 
 It is a [Prusa Connect](https://github.com/prusa3d/prusa-connect) service
 module: a small program that Prusa Connect starts, supervises and feeds with
@@ -24,8 +24,8 @@ The moods are checked in this order, and the first one that matches wins:
 | `offline` | Prusa Connect has no link to the printer | both lights off |
 | `error` | the printer reports `ERROR` | red |
 | `filament` | a dialog is up whose title or text contains a word from `filament_words`, or whose code is in `filament_codes` | blue |
-| `attention` | the printer reports `ATTENTION`, or any other dialog is up | amber |
-| `paused` | `PAUSED` | amber and white |
+| `attention` | the printer reports `ATTENTION`, or any other dialog is up | red |
+| `paused` | `PAUSED` | red and white |
 | `finished` | `FINISHED` | green and white |
 | `stopped` | `STOPPED` (a cancelled print) | both lights off |
 | `warming` | a heater has a target it hasn't reached yet | orange |
@@ -34,6 +34,13 @@ The moods are checked in this order, and the first one that matches wins:
 
 The order is deliberate: a state that needs a person beats one that doesn't, so
 a filament prompt in the middle of a print shows as `filament`, not `printing`.
+
+Red means "come and look". It covers an error, the printer asking for
+attention, and a pause. A pause is red because it's what
+[Obico](https://github.com/RobeeeJay/prusa-obico-local-server) sends when it
+thinks a print is failing. The module can't tell that pause from one you made
+yourself, so yours goes red too. Version 0.1.0 used amber for attention and
+pauses. It was hard to tell apart from the orange of warming up.
 
 ### Warming Up Isn't a Printer State
 
@@ -74,7 +81,8 @@ person, in the order of the table above. Set `printer` to follow just one.
 - **A Tasmota device with two lights**: the RGB channels as light 1 and the
   white channel as light 2. On an RGBW controller that means
   `SetOption37 128`, which splits them. The default scenes use `Power1` and
-  `Color1` for the RGB light and `Power2` for the white one.
+  `HSBColor1` for the RGB light and `Power2` for the white one. Not `Color1`:
+  see Why the Scenes Don't Use Color1.
 - **No web password on the Tasmota device.** The module sends plain
   `/cm?cmnd=` requests with no credentials (see Known Limitations).
 - **Go 1.26.11** and a checkout of Prusa Connect, to build it.
@@ -131,7 +139,7 @@ make copy PI=you@your-server
 Then on the server, run the script it prints:
 
 ```bash
-sudo bash ~/tasmota-lights-0.1.0/install.sh
+sudo bash ~/tasmota-lights-0.2.0/install.sh
 ```
 
 It needs root because the container is only reachable through `docker`. The
@@ -152,7 +160,7 @@ Run `module add` with the binary the server already is, then restart the
 server:
 
 ```bash
-prusa-connect module add github.com/robeeejay/prusa-tasmota-lights@0.1.0 -from ./release -approve
+prusa-connect module add github.com/robeeejay/prusa-tasmota-lights@0.2.0 -from ./release -approve
 ```
 
 This one is untested here. It's the command `install.sh` runs inside the
@@ -180,7 +188,7 @@ A scene is Tasmota commands separated by semicolons, sent in order:
 
 ```yaml
 scenes:
-  finished: "Power1 ON; Color1 00FF00; Power2 ON"
+  finished: "Power1 ON; HSBColor1 120,100,100; Power2 ON"
   idle: ""
 ```
 
@@ -192,6 +200,33 @@ Each command goes to Tasmota as its own request, not as one `Backlog`. That's
 three requests where one would do, but Tasmota answers `Backlog` with `{}` even
 when a command in it is misspelled, so a typo in a scene would fail without a
 word. One at a time, a misspelled command comes back as an error you can see.
+
+### Why the Scenes Don't Use Color1
+
+The symptom: the white light comes on during a print but gives no light, and
+the Tasmota web page shows its brightness at 0%. Set it back by hand and it
+stays there until the module shows a coloured scene, and then it's 0% again.
+
+The cause was the module's own scenes in version 0.1.0. They set the colour
+with a six-digit command like `Color1 FF6000`. On an RGBW controller split in
+two, that also sets the white channel to `00` and switches `Power2` off. The
+next `Power2 ON` then turns on a white light at 0%. Here's the device's own
+answer to `Color1 FF6000`, with the white at 57% beforehand:
+
+```
+{"POWER1":"ON","Dimmer1":100,"POWER2":"OFF","Dimmer2":0,"Color":"FF600000","White":0,"Channel":[100,38,0,0]}
+```
+
+`HSBColor1` (hue, saturation, brightness) sets the RGB light and leaves the
+white alone. After `HSBColor1 120,100,100` the same device answered
+`Color 00FF0091` and `Dimmer2 57`: green, with the white where it was. So
+every default scene uses it now. The hues are 0 for red, 23 for orange,
+120 for green and 225 for blue.
+
+If you've saved your own scenes in Prusa Connect, they replace the defaults
+and may still have `Color1` in them. Swap those for `HSBColor1` too, and put
+the white brightness back once by hand. The module never sets brightness
+itself, so it stays where you put it.
 
 ## Checking It Works
 
@@ -234,12 +269,18 @@ lights stay in whatever scene they were last sent.
 
 ## What's Been Tested
 
-- **Unit tests:** 25 tests, run with Go's race detector, cover the mood
+- **Unit tests:** 28 tests, run with Go's race detector, cover the mood
   rules, the warming latch, the Tasmota client (including the answers Tasmota
   gives for an unknown command and for a web password), choosing between
-  printers, and the sender. Four of the checks (the warming latch, Tasmota's
-  refusals, settling after telemetry, and not resending a scene) were
-  confirmed by breaking the code and watching the test fail. The rest weren't.
+  printers, the sender, and the defaults in `module.yaml`: no scene writes
+  the white channel, finished is green and the stopped moods are red, and the
+  binary answers the manifest's version. Seven of the checks (the warming
+  latch, Tasmota's refusals, settling after telemetry, not resending a scene,
+  and the three about `module.yaml`) were confirmed by breaking the code or
+  testing the old defaults and watching the test fail. The rest weren't.
+  The version test exists because 0.2.0 first shipped with `module.yaml` bumped
+  and the binary still saying 0.1.0. Prusa Connect refused to start it, with
+  `RESOURCE_MANIFEST_DISAGREES`, and the lights just sat there.
   One test, "the same mood is sent once", first passed
   for the wrong reason: it asked for the same mood faster than the sender read
   the requests, so the repeat was never seen at all. It now spaces them out.
@@ -269,8 +310,13 @@ lights stay in whatever scene they were last sent.
   `printing`, because the printer reports PRINTING a moment before it sets
   its heater targets. So the white light flashes on before the orange. It's
   harmless, but it's a flash, and it's in Future Work.
-- **Not seen yet on the real printer:** `paused`, `finished`, `stopped`,
-  `error`, and the filament prompt. Whether the MINI's "load filament" dialog
+- **Version 0.2.0 on the real MINI:** installed with the printer at FINISHED
+  after the print above. The device showed `Color 00FF0091` and `Dimmer2 57`,
+  green with the white still at the 57% it was set to, in two readings
+  20 seconds apart.
+- **Not seen yet on the real printer:** `paused`, `stopped`, `error`,
+  `attention`, and the filament prompt. So none of the red scenes has been
+  seen on a real failure yet, only on the device by hand. Whether the MINI's "load filament" dialog
   actually contains the word "filament" is a guess until it's watched happen.
 
 ## Known Limitations

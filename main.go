@@ -30,7 +30,7 @@ import (
 
 const (
 	name    = "tasmota-lights"
-	release = extension.Version("0.1.0")
+	release = extension.Version("0.2.0")
 
 	// pageSize is how many devices one device.list call asks for.
 	pageSize = 100
