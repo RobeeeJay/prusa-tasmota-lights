@@ -37,10 +37,9 @@ a filament prompt in the middle of a print shows as `filament`, not `printing`.
 
 Red means "come and look". It covers an error, the printer asking for
 attention, and a pause. A pause is red because it's what
-[Obico](https://github.com/RobeeeJay/prusa-obico-local-server) sends when it
-thinks a print is failing. The module can't tell that pause from one you made
-yourself, so yours goes red too. Version 0.1.0 used amber for attention and
-pauses. It was hard to tell apart from the orange of warming up.
+[Obico](https://www.obico.io/) sends when it thinks a print is failing. The
+module can't tell that pause from one you made yourself, so yours goes red too.
+Version 0.1.0 used amber for attention and pauses.
 
 ### Warming Up Isn't a Printer State
 
