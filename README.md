@@ -65,8 +65,12 @@ person, in the order of the table above. Set `printer` to follow just one.
 
 ## What You Need
 
-- **Prusa Connect** running somewhere it can reach the Tasmota device. The
-  module was built against Prusa Connect at commit `d4e7673`.
+- **Prusa Connect v0.1.0-beta.2** running somewhere it can reach the Tasmota
+  device. The module was built against commit `d4e7673`, between beta.1 and
+  beta.2, and runs unchanged on beta.2: after the upgrade it came back on its
+  own and drove the lights through a whole print start (see What's Been
+  Tested). It hasn't been rebuilt against beta.2's SDK, so the `.core/sdk`
+  copy is still the `d4e7673` one.
 - **A Tasmota device with two lights**: the RGB channels as light 1 and the
   white channel as light 2. On an RGBW controller that means
   `SetOption37 128`, which splits them. The default scenes use `Power1` and
@@ -242,10 +246,32 @@ lights stay in whatever scene they were last sent.
 - **On the real MINI:** the module installed, started, followed the printer's
   live temperatures, sent the `idle` scene, and showed `warming` and then
   `idle` during the 50 °C test above.
-- **Not seen yet on the real printer:** `printing`, `paused`, `finished`,
-  `stopped`, `error`, and the filament prompt. Whether the MINI's "load
-  filament" dialog actually contains the word "filament" is a guess until it's
-  watched happen.
+- **A real print, on Prusa Connect beta.2:** a PLA print sent from PrusaSlicer.
+  Here is every mood change from Prusa Connect's log, starting with the
+  restart that brought in beta.2:
+
+  | time | mood | what happened |
+  | --- | --- | --- |
+  | 20:18:16 | `offline` | Prusa Connect restarted, and the MINI hadn't reconnected |
+  | 20:18:17 | `idle` | the MINI was back |
+  | 20:23:53 | `printing` | the print started, before its heater targets arrived |
+  | 20:23:54 | `warming` | the targets arrived, 1.5 seconds later |
+  | 20:26:11 | `printing` | the first pair of targets was reached |
+  | 20:27:43 | `warming` | the nozzle got a new target, the print temperature |
+  | 20:28:31 | `printing` | reached, and the white light stayed on |
+
+  That's the warming latch doing its job: the MINI warms up once for probing
+  and again for printing, and both showed as `warming`. Half an hour later the
+  nozzle sat at 220.1 °C against 220 °C, and asking the Tasmota device itself
+  answered `POWER1` off and `POWER2` on, which is the printing scene.
+
+  One thing I didn't expect: the first 1.5 seconds of the print showed
+  `printing`, because the printer reports PRINTING a moment before it sets
+  its heater targets. So the white light flashes on before the orange. It's
+  harmless, but it's a flash, and it's in Future Work.
+- **Not seen yet on the real printer:** `paused`, `finished`, `stopped`,
+  `error`, and the filament prompt. Whether the MINI's "load filament" dialog
+  actually contains the word "filament" is a guess until it's watched happen.
 
 ## Known Limitations
 
@@ -265,6 +291,13 @@ lights stay in whatever scene they were last sent.
   needs a print or a filament load to watch.
 - **Tasmota credentials**, as a `secret` setting. Not done because the device
   this was written for has no web password.
+- **No white flash at the start of a print.** The printer reports PRINTING
+  about 1.5 seconds before its heater targets, so `printing` shows briefly
+  before `warming`. Waiting a couple of seconds before showing `printing`
+  would hide it. Not done yet because it was only just seen, and it needs a
+  test for the wait.
+- **Rebuild against beta.2's SDK.** The module runs on beta.2 as built from
+  `d4e7673`. Not done because nothing has needed it yet.
 
 That's it. If the lights do something odd, the status route above is the first
 place to look. It shows what the module thought the printer was doing, which
